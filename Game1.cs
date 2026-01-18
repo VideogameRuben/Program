@@ -13,6 +13,7 @@ namespace BeatEmUpGame
         // Graphics and rendering
         private GraphicsDeviceManager _graphics;
         private SpriteBatch _spriteBatch;
+        private SpriteFont _gameFont;
 
         // Game state management
         private GameState _currentState;
@@ -20,9 +21,16 @@ namespace BeatEmUpGame
         // Game objects
         private Player _player;
         private Camera _camera;
+        private Level _currentLevel;
+
+        // Mission complete state
+        private bool _missionComplete;
 
         // Input state tracking (to detect key press once)
         private KeyboardState _previousKeyboardState;
+
+        // Pixel texture for drawing backgrounds
+        private Texture2D _pixelTexture;
 
         // Screen dimensions
         private const int SCREEN_WIDTH = 1280;
@@ -48,14 +56,19 @@ namespace BeatEmUpGame
         /// </summary>
         protected override void Initialize()
         {
-            // Initialize game state
-            _currentState = GameState.Menu;
+            // Initialize game state - start directly in playing mode
+            _currentState = GameState.Playing;
 
             // Initialize the camera
             _camera = new Camera(GraphicsDevice.Viewport);
 
-            // Initialize player at starting position
-            _player = new Player(new Vector2(100, 400));
+            // Initialize level (0 to 3000 pixels wide)
+            _currentLevel = new Level(0, 3000);
+
+            // Initialize player at level start position
+            _player = new Player(_currentLevel.GetPlayerStartPosition());
+
+            _missionComplete = false;
 
             base.Initialize();
         }
@@ -68,12 +81,16 @@ namespace BeatEmUpGame
         {
             _spriteBatch = new SpriteBatch(GraphicsDevice);
 
+            // Load font for UI text
+            _gameFont = Content.Load<SpriteFont>("GameFont");
+
+            // Create pixel texture for backgrounds and player
+            _pixelTexture = new Texture2D(GraphicsDevice, 1, 1);
+            _pixelTexture.SetData(new[] { Color.White });
+
             // TODO: Load sprite sheets and textures here
             // Example: _player.LoadContent(Content);
-            // For now, we'll create a simple placeholder texture
-            Texture2D playerTexture = new Texture2D(GraphicsDevice, 1, 1);
-            playerTexture.SetData(new[] { Color.White });
-            _player.SetTexture(playerTexture);
+            _player.SetTexture(_pixelTexture);
         }
 
         /// <summary>
@@ -162,6 +179,13 @@ namespace BeatEmUpGame
             // Update camera to follow player
             _camera.Follow(_player.Position);
 
+            // Check if player reached end of level
+            _currentLevel.CheckCompletion(_player.Position);
+            if (_currentLevel.IsComplete && !_missionComplete)
+            {
+                _missionComplete = true;
+            }
+
             // TODO: Update enemies, check collisions, etc.
         }
 
@@ -183,7 +207,9 @@ namespace BeatEmUpGame
             if (keyboardState.IsKeyDown(Keys.Enter) && _previousKeyboardState.IsKeyUp(Keys.Enter))
             {
                 // Reset game and return to menu
-                _player.Reset(new Vector2(100, 400));
+                _currentLevel.Reset();
+                _missionComplete = false;
+                _player.Reset(_currentLevel.GetPlayerStartPosition());
                 _camera.Reset();
                 _currentState = GameState.Menu;
             }
@@ -252,7 +278,8 @@ namespace BeatEmUpGame
                 transformMatrix: _camera.GetTransformMatrix()
             );
 
-            // TODO: Draw background layers (parallax scrolling)
+            // Draw level background
+            _currentLevel.Draw(_spriteBatch, _pixelTexture, _camera.GetVisibleArea());
 
             // Draw player
             _player.Draw(_spriteBatch);
@@ -263,7 +290,22 @@ namespace BeatEmUpGame
 
             // Draw UI elements (health bars, score) without camera transform
             _spriteBatch.Begin();
-            // TODO: Draw HUD elements
+            
+            // Draw mission complete message
+            if (_missionComplete)
+            {
+                string completeText = "MISSION COMPLETE!";
+                Vector2 textSize = _gameFont.MeasureString(completeText);
+                Vector2 textPosition = new Vector2(
+                    (SCREEN_WIDTH - textSize.X) / 2,
+                    50
+                );
+                // Draw shadow
+                _spriteBatch.DrawString(_gameFont, completeText, textPosition + new Vector2(2, 2), Color.Black);
+                // Draw text
+                _spriteBatch.DrawString(_gameFont, completeText, textPosition, Color.Gold);
+            }
+            
             _spriteBatch.End();
         }
 
@@ -273,7 +315,21 @@ namespace BeatEmUpGame
         private void DrawPausedOverlay()
         {
             _spriteBatch.Begin();
-            // TODO: Draw semi-transparent overlay and "PAUSED" text
+            
+            // Draw semi-transparent black overlay
+            Texture2D pixel = new Texture2D(GraphicsDevice, 1, 1);
+            pixel.SetData(new[] { Color.Black });
+            _spriteBatch.Draw(pixel, new Rectangle(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT), Color.Black * 0.5f);
+            
+            // Draw "PAUSED" text in center of screen
+            string pausedText = "PAUSED";
+            Vector2 textSize = _gameFont.MeasureString(pausedText);
+            Vector2 textPosition = new Vector2(
+                (SCREEN_WIDTH - textSize.X) / 2,
+                (SCREEN_HEIGHT - textSize.Y) / 2
+            );
+            _spriteBatch.DrawString(_gameFont, pausedText, textPosition, Color.White);
+            
             _spriteBatch.End();
         }
 

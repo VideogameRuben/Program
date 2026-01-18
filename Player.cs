@@ -13,6 +13,10 @@ namespace BeatEmUpGame
         // Position and movement
         public Vector2 Position { get; private set; }
         private Vector2 _velocity;
+        
+        // Jump system (separate from Y position)
+        private float _jumpHeight;          // How high in the air the player is
+        private float _jumpVelocity;        // Vertical jump velocity
 
         // Player dimensions
         private const int PLAYER_WIDTH = 32;
@@ -20,12 +24,17 @@ namespace BeatEmUpGame
 
         // Movement constants
         private const float MOVE_SPEED = 200f;          // Horizontal movement speed (pixels/second)
+        private const float VERTICAL_MOVE_SPEED = 150f; // Vertical movement speed (pixels/second)
         private const float JUMP_VELOCITY = -500f;      // Initial jump velocity (negative = upward)
         private const float GRAVITY = 1500f;            // Gravity acceleration (pixels/second²)
         private const float MAX_FALL_SPEED = 800f;      // Terminal velocity
 
         // Ground level (Y position where player stands)
         private const float GROUND_LEVEL = 500f;
+        
+        // Vertical movement bounds (beat 'em up style)
+        private const float MIN_Y = 350f;   // Top boundary (edge of brown ground area)
+        private const float MAX_Y = 650f;   // Bottom boundary (bottom of screen area)
 
         // Player state
         private bool _isOnGround;
@@ -46,6 +55,8 @@ namespace BeatEmUpGame
             _isOnGround = false;
             _isFacingRight = true;
             _color = Color.Orange; // Default color for placeholder
+            _jumpHeight = 0f;
+            _jumpVelocity = 0f;
         }
 
         /// <summary>
@@ -65,26 +76,24 @@ namespace BeatEmUpGame
         {
             float deltaTime = (float)gameTime.ElapsedGameTime.TotalSeconds;
 
-            // Handle horizontal movement input
+            // Handle horizontal and vertical movement input
             HandleMovementInput(keyboardState);
 
-            // Handle jump input
+            // Handle jump input with spacebar
             HandleJumpInput(keyboardState);
 
-            // Apply physics (gravity and velocity)
-            ApplyPhysics(deltaTime);
+            // Apply jump physics (separate from ground position)
+            ApplyJumpPhysics(deltaTime);
 
-            // Update position based on velocity
+            // Update position based on velocity (only affects X and Y ground position)
             Position += _velocity * deltaTime;
-
-            // Check ground collision
-            CheckGroundCollision();
-
-            // TODO: Add bounds checking to keep player within level boundaries
+            
+            // Apply bounds checking for vertical movement
+            ApplyBounds();
         }
 
         /// <summary>
-        /// Handle left/right movement input
+        /// Handle movement input (left/right and up/down for beat 'em up style)
         /// </summary>
         private void HandleMovementInput(KeyboardState keyboardState)
         {
@@ -103,6 +112,23 @@ namespace BeatEmUpGame
                 _velocity.X = MOVE_SPEED;
                 _isFacingRight = true;
             }
+            
+            // Vertical movement (beat 'em up style)
+            // This allows walking up/down the playfield at any time
+            // Move up (toward back of screen)
+            if (keyboardState.IsKeyDown(Keys.W) || keyboardState.IsKeyDown(Keys.Up))
+            {
+                _velocity.Y = -VERTICAL_MOVE_SPEED;
+            }
+            // Move down (toward front of screen)
+            else if (keyboardState.IsKeyDown(Keys.S) || keyboardState.IsKeyDown(Keys.Down))
+            {
+                _velocity.Y = VERTICAL_MOVE_SPEED;
+            }
+            else
+            {
+                _velocity.Y = 0; // No vertical movement if not pressing up/down
+            }
         }
 
         /// <summary>
@@ -110,50 +136,80 @@ namespace BeatEmUpGame
         /// </summary>
         private void HandleJumpInput(KeyboardState keyboardState)
         {
-            // Jump with Space or W key, but only if on ground
-            if ((keyboardState.IsKeyDown(Keys.Space) || keyboardState.IsKeyDown(Keys.W)) && _isOnGround)
+            // Jump with Space key, but only if on ground (jump height is 0)
+            if (keyboardState.IsKeyDown(Keys.Space) && _jumpHeight <= 0f)
             {
-                _velocity.Y = JUMP_VELOCITY;
+                _jumpVelocity = JUMP_VELOCITY; // Start jumping up
                 _isOnGround = false;
             }
         }
 
         /// <summary>
-        /// Apply physics: gravity and velocity clamping
+        /// Apply jump physics: gravity affects jump height, not Y position
         /// </summary>
-        private void ApplyPhysics(float deltaTime)
+        private void ApplyJumpPhysics(float deltaTime)
         {
-            // Apply gravity (only when in air)
-            if (!_isOnGround)
+            // Only apply jump physics if we have jump velocity or are in the air
+            if (_jumpHeight > 0f || _jumpVelocity < 0f)
             {
-                _velocity.Y += GRAVITY * deltaTime;
-
-                // Clamp to maximum fall speed
-                if (_velocity.Y > MAX_FALL_SPEED)
-                    _velocity.Y = MAX_FALL_SPEED;
-            }
-        }
-
-        /// <summary>
-        /// Check if player has landed on the ground
-        /// </summary>
-        private void CheckGroundCollision()
-        {
-            // Simple ground collision: check if player is at or below ground level
-            if (Position.Y >= GROUND_LEVEL)
-            {
-                Position = new Vector2(Position.X, GROUND_LEVEL);
-                _velocity.Y = 0;
-                _isOnGround = true;
+                // Apply gravity to jump velocity (makes it more positive = falling)
+                _jumpVelocity += GRAVITY * deltaTime;
+                
+                // Clamp fall speed
+                if (_jumpVelocity > MAX_FALL_SPEED)
+                    _jumpVelocity = MAX_FALL_SPEED;
+                
+                // Update jump height based on velocity
+                // Negative velocity = going up, positive = falling down
+                _jumpHeight -= _jumpVelocity * deltaTime;
+                
+                // Check if landed on ground
+                if (_jumpHeight <= 0f)
+                {
+                    _jumpHeight = 0f;
+                    _jumpVelocity = 0f;
+                    _isOnGround = true;
+                }
+                else
+                {
+                    _isOnGround = false;
+                }
             }
             else
             {
-                _isOnGround = false;
+                // On ground
+                _isOnGround = true;
             }
+        }
+        
+        /// <summary>
+        /// Keep player within vertical bounds (beat 'em up style)
+        /// Prevents walking above the top edge of the ground or below bottom of screen
+        /// </summary>
+        private void ApplyBounds()
+        {
+            // Clamp Y position between min and max bounds
+            float newY = Position.Y;
+            
+            // Can't walk above the top boundary (edge of brown ground)
+            if (newY < MIN_Y)
+            {
+                newY = MIN_Y;
+                _velocity.Y = 0;
+            }
+            
+            // Can't walk below the bottom boundary (edge of screen)
+            if (newY > MAX_Y)
+            {
+                newY = MAX_Y;
+                _velocity.Y = 0;
+            }
+            
+            Position = new Vector2(Position.X, newY);
         }
 
         /// <summary>
-        /// Draw the player sprite
+        /// Draw the player sprite with shadow
         /// </summary>
         /// <param name="spriteBatch">SpriteBatch for rendering</param>
         public void Draw(SpriteBatch spriteBatch)
@@ -161,10 +217,14 @@ namespace BeatEmUpGame
             if (_texture == null)
                 return;
 
+            // Draw shadow (ellipse at player's feet)
+            DrawShadow(spriteBatch);
+
             // Create a rectangle for the player's sprite
+            // Jump height affects visual position (raises sprite up)
             Rectangle destinationRect = new Rectangle(
                 (int)Position.X,
-                (int)Position.Y,
+                (int)(Position.Y - _jumpHeight), // Subtract jump height to raise sprite
                 PLAYER_WIDTH,
                 PLAYER_HEIGHT
             );
@@ -188,6 +248,36 @@ namespace BeatEmUpGame
         }
 
         /// <summary>
+        /// Draw shadow underneath the player
+        /// </summary>
+        private void DrawShadow(SpriteBatch spriteBatch)
+        {
+            // Shadow is an ellipse at the player's feet
+            int shadowWidth = 40;
+            int shadowHeight = 10;
+            
+            // Shadow appears at ground position (Y coordinate)
+            Rectangle shadowRect = new Rectangle(
+                (int)Position.X + (PLAYER_WIDTH - shadowWidth) / 2,
+                (int)Position.Y + PLAYER_HEIGHT - 5,
+                shadowWidth,
+                shadowHeight
+            );
+            
+            // Draw semi-transparent black shadow
+            spriteBatch.Draw(
+                texture: _texture,
+                destinationRectangle: shadowRect,
+                sourceRectangle: null,
+                color: Color.Black * 0.3f,
+                rotation: 0f,
+                origin: Vector2.Zero,
+                effects: SpriteEffects.None,
+                layerDepth: 0f
+            );
+        }
+
+        /// <summary>
         /// Reset player to a starting position (used for game restart)
         /// </summary>
         /// <param name="startPosition">Position to reset to</param>
@@ -197,6 +287,8 @@ namespace BeatEmUpGame
             _velocity = Vector2.Zero;
             _isOnGround = false;
             _isFacingRight = true;
+            _jumpHeight = 0f;
+            _jumpVelocity = 0f;
         }
 
         /// <summary>
