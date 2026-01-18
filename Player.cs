@@ -45,7 +45,7 @@ namespace BeatEmUpGame
             _velocity = Vector2.Zero;
             _isOnGround = false;
             _isFacingRight = true;
-            _color = Color.Blue; // Default color for placeholder
+            _color = Color.Orange; // Default color for placeholder
         }
 
         /// <summary>
