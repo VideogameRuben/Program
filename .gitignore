@@ -1,0 +1,7 @@
+/bin/
+/obj/
+/Content/bin/
+/Content/obj/
+*.user
+*.suo
+.vs/

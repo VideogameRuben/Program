@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<XnaContent xmlns:Pipeline="Microsoft.Xna.Framework.Content.Pipeline">
+
+  <!--
+    This file contains an xml description of the content build process for the content pipeline.
+    Modify this file to add new content to be built and add additional build options.
+  -->
+
+  <!--
+    The content node contains all of the options and content items to be built.
+  -->
+  <Content>
+
+    <ItemGroup>
+      <!-- Add sprite sheet references here -->
+      <!-- Example: 
+      <Compile Include="Sprites\player.png">
+        <Name>player</Name>
+        <Importer>TextureImporter</Importer>
+        <Processor>TextureProcessor</Processor>
+      </Compile>
+      -->
+    </ItemGroup>
+
+  </Content>
+</XnaContent>
